@@ -1,0 +1,40 @@
+# Çevre değişkenleri
+.env
+
+# Composer bağımlılıkları
+/vendor/
+composer.phar
+
+# Log dosyaları
+/logs/*
+!logs/.gitkeep
+
+# Çalışma zamanı verileri
+/logs/request_history.json
+
+# IDE ve editör dosyaları
+.idea/
+.vscode/
+*.sublime-project
+*.sublime-workspace
+*.code-workspace
+
+# İşletim sistemi dosyaları
+.DS_Store
+Thumbs.db
+.directory
+desktop.ini
+
+# PHP hata logları
+php_errors.log
+*.log
+
+# Geçici dosyalar
+*.tmp
+*.swp
+*.swo
+*~
+
+# Derleme dosyaları
+*.phar
+*.cache

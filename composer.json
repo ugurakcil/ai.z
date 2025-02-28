@@ -1,0 +1,25 @@
+{
+    "name": "digitalexchange/ai-mail-reply",
+    "description": "AI powered email reply system",
+    "type": "project",
+    "require": {
+        "php": "^8.2",
+        "guzzlehttp/guzzle": "^7.8",
+        "phpmailer/phpmailer": "^6.9",
+        "vlucas/phpdotenv": "^5.6",
+        "monolog/monolog": "^3.5",
+        "erusev/parsedown": "^1.7"
+    },
+    "autoload": {
+        "psr-4": {
+            "DigitalExchange\\AiMailReply\\": "src/"
+        }
+    },
+    "authors": [
+        {
+            "name": "Digital Exchange",
+            "email": "ai@example.com"
+        }
+    ],
+    "minimum-stability": "stable"
+}
