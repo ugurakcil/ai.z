@@ -90,8 +90,11 @@ Markdown formatını kullanmalısın. Emojiler için Unicode UTF-8 kullanmalıs�
                 'json' => [
                     'model' => $this->config->getOpenaiConfig()['model'],
                     'messages' => $messages,
-                    'temperature' => 0.5,
-                    'max_tokens' => 10000,
+                    'temperature' => 0.7,
+                    'max_tokens' => 3000,
+                    'top_p' => 0.9,
+                    'frequency_penalty' => 0.1,
+                    'presence_penalty' => 0.3
                 ]
             ]);
 

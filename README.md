@@ -24,6 +24,7 @@ Bu sistem, belirli bir e-posta adresine (örn. ai@example.com) gelen e-postalar�
 - Eski e-posta zincirini yanıta ekleme özelliğini yapılandırabilme (opsiyonel)
 - Hata ayıklama modunu etkinleştirme/devre dışı bırakma özelliği
 - TO/CC alanı kontrolü: Sadece TO alanında olduğunda yanıt verme, CC olduğunda yanıt vermeme ve silme (opsiyonel)
+- İşlenen e-postaları otomatik olarak okundu işaretleme ve silme (sonsuz döngüleri önleme)
 
 ## Kurulum
 
@@ -136,6 +137,12 @@ Sistem, e-postanın TO veya CC alanında olup olmadığını kontrol edebilir ve
 - `IGNORE_CC_EMAILS=false`: Sistem hem TO hem de CC alanında olduğunda yanıt verir (varsayılan)
 
 Bu özellik, AI'ın sadece kendisine doğrudan gönderilen e-postalara yanıt vermesini sağlar ve bilgi amaçlı CC olarak eklendiği e-postaları otomatik olarak siler.
+
+## E-posta İşleme Sonrası Otomatik Temizleme
+
+Sistem, bir e-postayı başarıyla işledikten ve yanıt gönderdikten sonra:
+- E-postayı otomatik olarak okundu olarak işaretler
+- E-postayı otomatik olarak siler
 
 ## Engellenen Gönderenler ve Alıcılar
 

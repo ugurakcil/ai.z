@@ -49,6 +49,9 @@ class EmailProcessor
         $this->logger->info('Found ' . count($emails) . ' unseen emails');
         
         foreach ($emails as $email) {
+            // Açıklan e-postaları okundu olarak işaretle
+            $this->markEmailAsRead($email);
+
             try {
                 // 1. Alıcı sayısı kontrolü
                 if (count($email->getAllRecipients()) > $this->config->getMaxRecipients()) {
@@ -58,8 +61,8 @@ class EmailProcessor
                         'recipient_count' => count($email->getAllRecipients())
                     ]);
                     
-                    // E-postayı okundu olarak işaretle ve atla
-                    $this->markEmailAsRead($email);
+                    // E-posta sil ve atla
+                    $this->emailService->deleteEmailByMessageId($email->getMessageId());
                     continue;
                 }
                 
@@ -70,14 +73,14 @@ class EmailProcessor
                         'subject' => $email->getSubject()
                     ]);
                     
-                    // E-postayı okundu olarak işaretle ve atla
-                    $this->markEmailAsRead($email);
+                    // E-postayı sil ve atla
+                    $this->emailService->deleteEmailByMessageId($email->getMessageId());
                     continue;
                 }
                 
                 // 3. Engellenen gönderen kontrolü
                 if ($this->isBlockedSender($email->getFrom())) {
-                    $this->markEmailAsRead($email);
+                    $this->emailService->deleteEmailByMessageId($email->getMessageId());
                     continue;
                 }
                 
@@ -88,13 +91,21 @@ class EmailProcessor
                         'subject' => $email->getSubject()
                     ]);
                     
-                    // E-postayı sil
+                    // E-posta sil ve atla
                     $this->emailService->deleteEmailByMessageId($email->getMessageId());
-                    
                     continue;
                 }
                 
-                /*
+                // Check if sender domain is allowed
+                if (!$this->isAllowedDomain($email->getFrom())) {
+                    $this->logger->warning('Email from unauthorized domain', [
+                        'from' => $email->getFrom()
+                    ]);
+                    
+                    $this->emailService->deleteEmailByMessageId($email->getMessageId());
+                    continue;
+                }
+                
                 $this->logger->info('Processing email', [
                     'from' => $email->getFrom(),
                     'subject' => $email->getSubject(),
@@ -102,15 +113,6 @@ class EmailProcessor
                     'html_body' => $email->getHtmlBody(),
                     'thread_emails_count' => count($email->getThreadEmails())
                 ]);
-                */
-                
-                // Check if sender domain is allowed
-                if (!$this->isAllowedDomain($email->getFrom())) {
-                    $this->logger->warning('Email from unauthorized domain', [
-                        'from' => $email->getFrom()
-                    ]);
-                    $this->markEmailAsRead($email);
-                }
                 
                 // Check request limit
                 $this->requestHistoryRepository->recordRequest($email->getFrom());
@@ -126,6 +128,12 @@ class EmailProcessor
                         'from' => $email->getFrom(),
                         'subject' => $email->getSubject(),
                         'ai_response_content' => $aiResponse->getContent()
+                    ]);
+                    
+                    // E-posta cevaplanınca sil
+                    $this->emailService->deleteEmailByMessageId($email->getMessageId());
+                    $this->logger->info('Email marked as read and deleted after processing', [
+                        'message_id' => $email->getMessageId()
                     ]);
                 } else {
                     $this->logger->error('Failed to send reply', [
