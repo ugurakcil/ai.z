@@ -105,19 +105,6 @@ class EmailService
                 $email = $this->fetchEmail($emailId);
                 
                 if ($email) {
-                    // Validate sender domain and check if sender is blocked
-                    $senderEmail = $email->getFrom();
-                    if (!$this->isAllowedDomain($senderEmail)) {
-                        $this->logger->warning('Email from unauthorized domain: ' . $senderEmail);
-                        // Delete email instead of marking as read
-                        $this->deleteEmail($emailId);
-                        continue;
-                    } else if (in_array($senderEmail, $this->blockedSenders)) {
-                        $this->logger->warning('Email from blocked sender: ' . $senderEmail);
-                        // Delete email instead of marking as read
-                        $this->deleteEmail($emailId);
-                        continue;
-                    }
                     $emails[] = $email;
                 }
             }
