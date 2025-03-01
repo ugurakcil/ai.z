@@ -20,6 +20,7 @@ class EmailService
     private array $allowedDomains;
     private bool $includeThreadEmails;
     private array $blockedSenders;
+    private $imapStream = null;
     private Parsedown $parsedown;
 
     public function __construct(AppConfig $config, Logger $logger)
@@ -33,6 +34,49 @@ class EmailService
     }
 
     /**
+     * Open IMAP connection
+     * 
+     * @param array|null $imapConfig Optional IMAP configuration, if null uses config from constructor
+     * @return bool True if connection opened successfully, false otherwise
+     */
+    private function openImapConnection(?array $imapConfig = null): bool
+    {
+        if ($this->imapStream !== null) {
+            // Connection already open
+            return true;
+        }
+
+        if ($imapConfig === null) {
+            $imapConfig = $this->config->getImapConfig();
+        }
+
+        $mailbox = $this->getImapMailbox($imapConfig);
+
+        try {
+            $this->imapStream = imap_open($mailbox, $imapConfig['username'], $imapConfig['password']);
+            if (!$this->imapStream) {
+                $this->logger->error('IMAP connection failed: ' . (imap_last_error() ?: 'Unknown error'));
+                return false;
+            }
+            return true;
+        } catch (\Exception $e) {
+            $this->logger->error('Error opening IMAP connection: ' . $e->getMessage());
+            return false;
+        }
+    }
+
+    /**
+     * Close IMAP connection if open
+     */
+    private function closeImapConnection(): void
+    {
+        if ($this->imapStream !== null) {
+            imap_close($this->imapStream);
+            $this->imapStream = null;
+        }
+    }
+
+    /**
      * Get unseen emails from IMAP server
      * 
      * @return array Array of Email objects
@@ -40,28 +84,25 @@ class EmailService
     public function getUnseenEmails(): array
     {
         $imapConfig = $this->config->getImapConfig();
-        $mailbox = $this->getImapMailbox($imapConfig);
-        
         $emails = [];
         
         try {
-            // Connect to the mailbox
-            if (!imap_open($mailbox, $imapConfig['username'], $imapConfig['password'])) {
-                $this->logger->error('IMAP connection failed: ' . imap_last_error());
+            // Open IMAP connection
+            if (!$this->openImapConnection($imapConfig)) {
                 return [];
             }
             
             // Search for unseen messages
-            $unseenEmails = imap_search(imap_open($mailbox, $imapConfig['username'], $imapConfig['password']), 'UNSEEN');
+            $unseenEmails = imap_search($this->imapStream, 'UNSEEN');
             
             if (!$unseenEmails) {
                 $this->logger->info('No unseen emails found');
-                imap_close(imap_open($mailbox, $imapConfig['username'], $imapConfig['password']));
+                $this->closeImapConnection();
                 return [];
             }
             
             foreach ($unseenEmails as $emailId) {
-                $email = $this->fetchEmail($emailId, imap_open($mailbox, $imapConfig['username'], $imapConfig['password']));
+                $email = $this->fetchEmail($emailId);
                 
                 if ($email) {
                     // Validate sender domain and check if sender is blocked
@@ -69,22 +110,21 @@ class EmailService
                     if (!$this->isAllowedDomain($senderEmail)) {
                         $this->logger->warning('Email from unauthorized domain: ' . $senderEmail);
                         // Delete email instead of marking as read
-                        $this->deleteEmail($emailId, imap_open($mailbox, $imapConfig['username'], $imapConfig['password']));
+                        $this->deleteEmail($emailId);
                         continue;
                     } else if (in_array($senderEmail, $this->blockedSenders)) {
                         $this->logger->warning('Email from blocked sender: ' . $senderEmail);
                         // Delete email instead of marking as read
-                        $this->deleteEmail($emailId, imap_open($mailbox, $imapConfig['username'], $imapConfig['password']));
+                        $this->deleteEmail($emailId);
                         continue;
                     }
-                    
                     $emails[] = $email;
                 }
             }
-            
-            imap_close(imap_open($mailbox, $imapConfig['username'], $imapConfig['password']));
         } catch (\Exception $e) {
             $this->logger->error('Error fetching emails: ' . $e->getMessage());
+        } finally {
+            $this->closeImapConnection();
         }
         
         return $emails;
@@ -94,14 +134,25 @@ class EmailService
      * Fetch email details from IMAP
      * 
      * @param int $emailId Email ID
-     * @param resource $imapStream IMAP stream
      * @return Email|null Email object or null on error
      */
-    private function fetchEmail(int $emailId, $imapStream): ?Email
+    private function fetchEmail(int $emailId): ?Email
     {
+        if ($this->imapStream === null) {
+            $this->logger->error('IMAP connection not open');
+            return null;
+        }
+
         try {
-            $overview = imap_fetch_overview($imapStream, (string)$emailId, 0);
-            $structure = imap_fetchstructure($imapStream, $emailId);
+            $overview = imap_fetch_overview($this->imapStream, (string)$emailId, 0);
+            
+            // Mesaj numarasının geçerli olup olmadığını kontrol et
+            $messageCount = imap_num_msg($this->imapStream);
+            if ($emailId > $messageCount || $emailId < 1) {
+                $this->logger->warning('Invalid message number: ' . $emailId);
+                return null;
+            }
+
             
             if (empty($overview)) {
                 return null;
@@ -109,10 +160,17 @@ class EmailService
             
             $overview = $overview[0];
             
+            // Yapıyı al
+            $structure = null;
+            try {
+                $structure = imap_fetchstructure($this->imapStream, $emailId);
+            } catch (\Exception $e) {
+                $this->logger->warning('Error fetching structure: ' . $e->getMessage());
+            }
             // Get headers
-            $headers = imap_fetchheader($imapStream, $emailId);
+            $headers = imap_fetchheader($this->imapStream, $emailId);
             
-            // Parse headers
+            // Parse headers 
             $headerObj = imap_rfc822_parse_headers($headers);
             
             // Get message ID
@@ -122,8 +180,8 @@ class EmailService
             $subject = $this->decodeSubject($overview->subject ?? '');
             
             // Get body
-            $body = $this->getEmailBody($imapStream, $emailId, $structure);
-            $htmlBody = $this->getEmailHtmlBody($imapStream, $emailId, $structure);
+            $body = $structure ? $this->getEmailBody($emailId, $structure) : '';
+            $htmlBody = $structure ? $this->getEmailHtmlBody($emailId, $structure) : '';
             
             // Get sender
             $from = $headerObj->from[0]->mailbox . '@' . $headerObj->from[0]->host;
@@ -155,7 +213,7 @@ class EmailService
             
             // Get thread emails if this is a reply
             if ($references) {
-                $threadEmails = $this->getThreadEmails($imapStream, $references);
+                $threadEmails = $this->getThreadEmails($references);
                 $email->setThreadEmails($threadEmails);
             }
             
@@ -172,46 +230,60 @@ class EmailService
     /**
      * Get email body
      * 
-     * @param resource $imapStream IMAP stream
      * @param int $emailId Email ID
      * @param object $structure Email structure
      * @return string Email body
      */
-    private function getEmailBody($imapStream, $emailId, $structure): string
+    private function getEmailBody(int $emailId, $structure): string
     {
         $body = '';
+        
+        if ($this->imapStream === null) {
+            $this->logger->error('IMAP connection not open');
+            return '';
+        }
+
 
         // Önce tüm e-posta içeriğini al
-        $fullBody = imap_body($imapStream, $emailId);
+        $fullBody = '';
+        try {
+            $fullBody = imap_body($this->imapStream, $emailId);
+        } catch (\Exception $e) {
+            $this->logger->warning('Error fetching email body: ' . $e->getMessage());
+            return '';
+        }
+        
         
         // Eğer içerik boşsa, farklı bir yaklaşım dene
         if (empty($fullBody)) {
             $this->logger->info('Email body is empty, trying alternative methods');
             
             // Alternatif 1: imap_fetchbody ile "1" parametresi
-            $body = imap_fetchbody($imapStream, $emailId, "1");
+            $body = imap_fetchbody($this->imapStream, $emailId, "1");
             
             // Alternatif 2: imap_fetchbody ile "1.1" parametresi (genellikle plaintext)
             if (empty($body)) {
-                $body = imap_fetchbody($imapStream, $emailId, "1.1");
+                $body = imap_fetchbody($this->imapStream, $emailId, "1.1");
             }
             
             // Alternatif 3: imap_fetchbody ile "1.2" parametresi (genellikle HTML)
             if (empty($body)) {
-                $body = imap_fetchbody($imapStream, $emailId, "1.2");
+                $body = imap_fetchbody($this->imapStream, $emailId, "1.2");
             }
         } else {
             $body = $fullBody;
         }
         
         // Decode body
-        if ($structure->encoding == 3) { // Base64
-            $body = base64_decode($body);
-        } elseif ($structure->encoding == 4) { // Quoted-printable
-            $body = quoted_printable_decode($body);
-        } else {
-            // Diğer kodlamalar için de quoted-printable decode deneyelim
-            $body = quoted_printable_decode($body);
+        if ($structure) {
+            if ($structure->encoding == 3) { // Base64
+                $body = base64_decode($body);
+            } elseif ($structure->encoding == 4) { // Quoted-printable
+                $body = quoted_printable_decode($body);
+            } else {
+                // Diğer kodlamalar için de quoted-printable decode deneyelim
+                $body = quoted_printable_decode($body);
+            }
         }
         
         // Log body information
@@ -226,34 +298,41 @@ class EmailService
     /**
      * Get email HTML body
      * 
-     * @param resource $imapStream IMAP stream
      * @param int $emailId Email ID
      * @param object $structure Email structure
      * @return string Email HTML body
      */
-    private function getEmailHtmlBody($imapStream, $emailId, $structure): string
+    private function getEmailHtmlBody(int $emailId, $structure): string
     {
         $htmlBody = '';
         
-        if ($structure->type == 1) { // Multipart
+        if ($this->imapStream === null) {
+            $this->logger->error('IMAP connection not open');
+            return '';
+        }
+
+        
+        if ($structure && $structure->type == 1) { // Multipart
             // Try to get HTML part
             for ($i = 0; $i < count($structure->parts); $i++) {
                 $part = $structure->parts[$i];
                 if ($part->type == 0 && $part->subtype == 'HTML') {
-                    $htmlBody = imap_fetchbody($imapStream, $emailId, (string)($i + 1));
-                    break;
+                    $htmlBody = imap_fetchbody($this->imapStream, $emailId, (string)($i + 1));
+                    break; 
                 }
             }
         }
         
         // Decode body
-        if ($structure->encoding == 3) { // Base64
-            $htmlBody = base64_decode($htmlBody);
-        } elseif ($structure->encoding == 4) { // Quoted-printable
-            $htmlBody = quoted_printable_decode($htmlBody);
-        } else {
-            // Diğer kodlamalar için de quoted-printable decode deneyelim
-            $htmlBody = quoted_printable_decode($htmlBody);
+        if ($structure) {
+            if ($structure->encoding == 3) { // Base64
+                $htmlBody = base64_decode($htmlBody);
+            } elseif ($structure->encoding == 4) { // Quoted-printable
+                $htmlBody = quoted_printable_decode($htmlBody);
+            } else {
+                // Diğer kodlamalar için de quoted-printable decode deneyelim
+                $htmlBody = quoted_printable_decode($htmlBody);
+            }
         }
         
         return $htmlBody;
@@ -298,14 +377,19 @@ class EmailService
     /**
      * Get thread emails
      * 
-     * @param resource $imapStream IMAP stream
      * @param string $references Message references
      * @return array Array of email bodies
      */
-    private function getThreadEmails($imapStream, string $references): array
+    private function getThreadEmails(string $references): array
     {
         $threadEmails = [];
         $messageIds = explode(' ', $references);
+        
+        if ($this->imapStream === null) {
+            $this->logger->error('IMAP connection not open');
+            return $threadEmails;
+        }
+
         
         foreach ($messageIds as $messageId) {
             $messageId = trim($messageId);
@@ -315,22 +399,30 @@ class EmailService
             
             // Get all messages and filter by Message-ID
             $search = [];
-            $messageCount = imap_num_msg($imapStream);
-            
-            for ($i = 1; $i <= $messageCount; $i++) {
-                $headers = imap_headerinfo($imapStream, $i);
-                if (!$headers) {
-                    continue;
+            try {
+                $messageCount = imap_num_msg($this->imapStream);
+                
+                for ($i = 1; $i <= $messageCount; $i++) {
+                    $headers = null;
+                    try {
+                        $headers = imap_headerinfo($this->imapStream, $i);
+                    } catch (\Exception $e) {
+                        $this->logger->warning('Error fetching header info: ' . $e->getMessage());
+                        continue;
+                    }
+                    if (!$headers) {
+                        continue;
+                    }
+                    if (isset($headers->message_id) && trim($headers->message_id) === $messageId) {
+                        $search[] = $i;
+                    }
                 }
-                if (isset($headers->message_id) && trim($headers->message_id) === $messageId) {
-                    $search[] = $i;
-                }
+            } catch (\Exception $e) {
+                $this->logger->warning('Error searching for message: ' . $e->getMessage());
             }
             
             if ($search && count($search) > 0) {
-                $emailId = $search[0];
-                $structure = imap_fetchstructure($imapStream, $emailId);
-                $body = $this->getEmailBody($imapStream, $emailId, $structure);
+                $body = $this->getEmailBody($search[0], null);
                 
                 if (!empty($body)) {
                     $threadEmails[] = $body;
@@ -732,23 +824,25 @@ class EmailService
     public function markEmailAsRead(string $messageId): bool
     {
         $imapConfig = $this->config->getImapConfig();
-        $mailbox = $this->getImapMailbox($imapConfig);
         
         try {
-            // Connect to the mailbox
-            $imapStream = imap_open($mailbox, $imapConfig['username'], $imapConfig['password']);
-            
-            if (!$imapStream) {
-                $this->logger->error('IMAP connection failed: ' . imap_last_error());
+            // Open IMAP connection
+            if (!$this->openImapConnection($imapConfig)) {
                 return false;
             }
             
             // Get all messages and filter by Message-ID
             $search = [];
-            $messageCount = imap_num_msg($imapStream);
+            $messageCount = imap_num_msg($this->imapStream);
             
             for ($i = 1; $i <= $messageCount; $i++) {
-                $headers = imap_headerinfo($imapStream, $i);
+                $headers = null;
+                try {
+                    $headers = imap_headerinfo($this->imapStream, $i);
+                } catch (\Exception $e) {
+                    $this->logger->warning('Error fetching header info: ' . $e->getMessage());
+                    continue;
+                }
                 if (!$headers) {
                     continue;
                 }
@@ -758,15 +852,15 @@ class EmailService
             }
             
             if ($search && count($search) > 0) {
-                imap_setflag_full($imapStream, (string)$search[0], "\\Seen");
+                imap_setflag_full($this->imapStream, (string)$search[0], "\\Seen");
                 $this->logger->info('Email marked as read', ['message_id' => $messageId]);
             }
-            
-            imap_close($imapStream);
             return true;
         } catch (\Exception $e) {
             $this->logger->error('Error marking email as read: ' . $e->getMessage());
             return false;
+        } finally {
+            $this->closeImapConnection();
         }
     }
 
@@ -779,39 +873,40 @@ class EmailService
     public function deleteEmailByMessageId(string $messageId): bool
     {
         $imapConfig = $this->config->getImapConfig();
-        $mailbox = $this->getImapMailbox($imapConfig);
         
         try {
-            // Connect to the mailbox
-            $imapStream = imap_open($mailbox, $imapConfig['username'], $imapConfig['password']);
-            
-            if (!$imapStream) {
-                $this->logger->error('IMAP connection failed: ' . imap_last_error());
+            // Open IMAP connection
+            if (!$this->openImapConnection($imapConfig)) {
                 return false;
             }
             
             // Get all messages and filter by Message-ID
             $search = [];
-            $messageCount = imap_num_msg($imapStream);
+            $messageCount = imap_num_msg($this->imapStream);
             
             for ($i = 1; $i <= $messageCount; $i++) {
-                $headers = imap_headerinfo($imapStream, $i);
+                $headers = null;
+                try {
+                    $headers = imap_headerinfo($this->imapStream, $i);
+                } catch (\Exception $e) {
+                    $this->logger->warning('Error fetching header info: ' . $e->getMessage());
+                    continue;
+                }
                 if (!$headers) {
                     continue;
                 }
                 if (isset($headers->message_id) && trim($headers->message_id) === $messageId) {
-                    $this->deleteEmail($i, $imapStream);
+                    $this->deleteEmail($i);
                     $this->logger->info('Email deleted by message ID', ['message_id' => $messageId]);
-                    imap_close($imapStream);
                     return true;
                 }
             }
-            
-            imap_close($imapStream);
             return false;
         } catch (\Exception $e) {
             $this->logger->error('Error deleting email by message ID: ' . $e->getMessage());
             return false;
+        } finally {
+            $this->closeImapConnection();
         }
     }
     
@@ -819,17 +914,27 @@ class EmailService
      * Delete email
      * 
      * @param int $emailId Email ID
-     * @param resource $imapStream IMAP stream
      * @return bool True on success, false on failure
      */
-    private function deleteEmail(int $emailId, $imapStream): bool
+    private function deleteEmail(int $emailId): bool
     {
+        if ($this->imapStream === null) {
+            $this->logger->error('IMAP connection not open');
+            return false;
+        }
+
         try {
             // Mark email for deletion
-            imap_delete($imapStream, (string)$emailId);
+            try {
+                imap_delete($this->imapStream, (string)$emailId);
+                
+                // Expunge deleted messages
+                imap_expunge($this->imapStream);
+            } catch (\Exception $e) {
+                $this->logger->warning('Error deleting email: ' . $e->getMessage());
+                return false;
+            }
             
-            // Expunge deleted messages
-            imap_expunge($imapStream);
             
             $this->logger->info('Email deleted', ['email_id' => $emailId]);
             return true;
