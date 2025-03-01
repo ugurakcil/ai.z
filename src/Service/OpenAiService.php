@@ -65,7 +65,12 @@ class OpenAiService
 Markdown formatını kullanmalısın. Emojiler için Unicode UTF-8 kullanmalısın. Her başlıkta en az bir emoji kullanmalısın. Örneğin: 👍 🎉 ✅ 😊 👋 🚀 ⚠️ ❗ ❓ ✨ 💡 gibi. Emojiler e-posta içeriğinde görünecek ve mesajı daha canlı hale getirecektir."
             ];
 
-            if ($this->config->allowAiRecipients()) {
+            // TODO: Burası çok riskli bir alan, değerlendirilecek. Kesinlikle çalışmadığına emin olalım
+            if ($this->config->allowAiRecipients() && false) {
+                $this->logger->warning('allowAiRecipients', [
+                    'info' => "allowAiRecipients is enabled. AI recipients are allowed to be used."
+                ]);
+
                 // Add instruction for response format
                 $messages[] = [
                     'role' => 'system',

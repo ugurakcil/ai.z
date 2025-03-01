@@ -49,8 +49,19 @@ class EmailProcessor
         $this->logger->info('Found ' . count($emails) . ' unseen emails');
         
         foreach ($emails as $email) {
-            // Açıklan e-postaları okundu olarak işaretle
-            $this->markEmailAsRead($email);
+            usleep(200000); // 0.2 seconds delay between each email processing
+            // Açılan e-postaları okundu olarak işaretle
+            $marked = $this->markEmailAsRead($email);
+
+            if (!$marked) {
+                $this->logger->warning('Failed to mark email as read', [
+                    'from' => $email->getFrom(),
+                    'subject' => $email->getSubject()
+                ]);
+
+                sleep(1);
+                $this->markEmailAsRead($email); // try again // TODO: add Retry mechanism (max 3) and stop
+            }
 
             try {
                 // 1. Alıcı sayısı kontrolü
@@ -279,8 +290,8 @@ class EmailProcessor
      */
     private function isEmailInCcOnly(Email $email): bool
     {
-        $emailConfig = $this->config->getEmailConfig();
-        $aiEmailAddress = $emailConfig['username'];
+        $imapConfig = $this->config->getImapConfig();
+        $aiEmailAddress = $imapConfig['username'];
         
         // TO alanında AI e-posta adresi var mı kontrol et
         $toRecipients = $email->getTo();
@@ -299,11 +310,12 @@ class EmailProcessor
     /**
      * Mark email as read
      * 
-     * @param Email $email Email object
+     * @param Email $email Email object 
+     * @return bool True if marked as read, false otherwise
      */
-    private function markEmailAsRead(Email $email): void
+    private function markEmailAsRead(Email $email): bool
     {
-        $this->emailService->markEmailAsRead($email->getMessageId());
+        return $this->emailService->markEmailAsRead($email->getMessageId());
     }
 
     /**
