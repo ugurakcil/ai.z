@@ -90,13 +90,15 @@ Markdown formatını kullanmalısın. Emojiler için Unicode UTF-8 kullanmalıs�
                 ];
             }
 
+            $this->logger->info('Sent messages to AI : ' . print_r($messages, true));
+
             // Make API request
             $response = $this->client->post('chat/completions', [
                 'json' => [
                     'model' => $this->config->getOpenaiConfig()['model'],
                     'messages' => $messages,
                     'temperature' => 0.7,
-                    'max_tokens' => 3000,
+                    'max_tokens' => 7000,
                     'top_p' => 0.9,
                     'frequency_penalty' => 0.1,
                     'presence_penalty' => 0.3
@@ -135,7 +137,7 @@ Markdown formatını kullanmalısın. Emojiler için Unicode UTF-8 kullanmalıs�
      * @param Email $email Email object
      * @return string Prepared prompt
      */
-    public function preparePrompt(Email $email): string
+    private function preparePrompt(Email $email): string
     {
         $prompt = '';
 
@@ -170,54 +172,138 @@ Markdown formatını kullanmalısın. Emojiler için Unicode UTF-8 kullanmalıs�
 
         return $prompt;
     }
-    
+
     /**
-     * Clean email content for better readability
-     * 
-     * @param string $content Email content
-     * @return string Cleaned content
+     * E-posta içeriğini temizleyerek daha okunaklı ve optimize hale getirir.
+     * Çeşitli e-posta platformlarıyla uyumlu çalışır.
+     *
+     * @param string $content E-posta içeriği
+     * @return string Temizlenmiş içerik
      */
     public function cleanEmailContent(string $content): string
     {
-        // HTML etiketlerini kaldır
+        // Farklı karakter kodlamaları için koruma
+        if (!mb_check_encoding($content, 'UTF-8')) {
+            $content = mb_convert_encoding($content, 'UTF-8', mb_detect_encoding($content, ['UTF-8', 'ISO-8859-9', 'ISO-8859-1'], true));
+        }
+
+        // 1. MIME bölümlerini belirle ve "text/plain" olanı ayıkla (daha güvenilir regex)
+        if (preg_match('/Content-Type:\s*text\/plain(?:;|\s).*?(?:\n\n|\r\n\r\n)(.*?)(?=\n--[0-9a-zA-Z]+(?:--)?|\Z)/is', $content, $matches)) {
+            $plainText = $matches[1];
+            // Başarıyla text/plain içeriği çıkartıldıysa ve yeterince uzunsa kullan
+            if (strlen($plainText) > 5) {
+                $content = $plainText;
+            }
+        }
+        
+        // Eğer multipart mesajsa ve text/plain bulunamadıysa, alternatif yaklaşım
+        if (strpos($content, 'Content-Type: multipart/') !== false && !isset($plainText)) {
+            // Tüm MIME bölümlerini bul
+            preg_match_all('/--.*?\n(.*?)\n\n(.*?)(?=\n--|\Z)/s', $content, $parts, PREG_SET_ORDER);
+            
+            foreach ($parts as $part) {
+                $headers = $part[1];
+                $body = $part[2];
+                
+                // text/plain bölümünü bul, HTML içeren bölümleri atla
+                if (strpos($headers, 'text/plain') !== false && strpos($headers, 'text/html') === false) {
+                    $content = $body;
+                    break;
+                }
+            }
+        }
+
+        // 2. Base64 kodlu ekleri temizle (daha kapsamlı regex)
+        $content = preg_replace('/--.*?\nContent-Type: (?:image|application)\/.*?(?:\n.*?)*?Content-Transfer-Encoding: base64.*?\n\n[A-Za-z0-9\/\+\r\n=]+/is', '[EK KALDIRILDI]', $content);
+        
+        // 3. Inline base64 imajları kaldır
+        $content = preg_replace('/Content-ID:.*?\nX-Attachment-Id:.*?\n\n[A-Za-z0-9\/\+\r\n=]+/is', '[GÖRSEL KALDIRILDI]', $content);
+        
+        // 4. MIME boundary'leri temizle
+        $content = preg_replace('/--[0-9a-zA-Z]+(?:--)?\r?\n/i', '', $content);
+        
+        // 5. Gereksiz başlıkları temizle - daha geniş kapsam
+        $headersToRemove = [
+            'Content-ID:', 
+            'X-Attachment-Id:', 
+            'Content-Disposition:', 
+            'Content-Transfer-Encoding:', 
+            'Content-Type:',
+            'MIME-Version:',
+            'boundary=',
+            'charset='
+        ];
+        
+        foreach ($headersToRemove as $header) {
+            $content = preg_replace('/' . preg_quote($header, '/') . '.*?\n/im', '', $content);
+        }
+        
+        // 6. HTML etiketlerini temizle
         $content = strip_tags($content);
         
-        // Quoted-printable kodlamasını çöz (eğer hala varsa)
+        // 7. Quoted-printable kodlamasını çöz
         $content = quoted_printable_decode($content);
         
-        // Satır sonlarını düzelt
-        $content = str_replace(["\r\n", "\r"], "\n", $content);
-        
-        // Özel karakterleri düzelt
-        $content = mb_convert_encoding($content, 'UTF-8', 'UTF-8');
-
-        // =?UTF-8?B? gibi kodlanmış başlıkları çöz
+        // 8. Başlık kodlamalarını çöz (=?UTF-8?B? ve =?UTF-8?Q?) - daha kapsamlı
         $content = preg_replace_callback(
-            '/=\?UTF-8\?B\?(.*?)\?=/',
+            '/=\?([A-Za-z0-9\-]+)\?([BQ])\?(.*?)\?=/is',
             function ($matches) {
-                return base64_decode($matches[1]);
+                $charset = $matches[1];
+                $encoding = $matches[2];
+                $text = $matches[3];
+                
+                if (strtoupper($encoding) === 'B') {
+                    $decoded = base64_decode($text);
+                } else {
+                    $decoded = quoted_printable_decode(str_replace('_', ' ', $text));
+                }
+                
+                // Farklı karakter seti kullanılmışsa dönüştür
+                if (strtoupper($charset) !== 'UTF-8') {
+                    $decoded = mb_convert_encoding($decoded, 'UTF-8', $charset);
+                }
+                
+                return $decoded;
             },
             $content
         );
         
-        // =?UTF-8?Q? gibi kodlanmış başlıkları çöz
+        // 9. Hex kodlanmış karakterleri çöz (=C4=9F → 'ğ')
         $content = preg_replace_callback(
-            '/=\?UTF-8\?Q\?(.*?)\?=/',
-            function ($matches) {
-                return quoted_printable_decode(str_replace('_', ' ', $matches[1]));
-            },
-            $content
-        );
-        
-        // =C4=9F gibi kodlanmış karakterleri çöz
-        $content = preg_replace_callback(
-            '/=([0-9A-F]{2})/',
+            '/=([0-9A-F]{2})/i',
             function ($matches) {
                 return chr(hexdec($matches[1]));
             },
             $content
         );
         
-        return trim($content);
+        // 11. Tekrar eden e-posta imzalarını temizle (daha güvenilir regex)
+        $content = preg_replace('/(\n-- \n.*?)(\1+)/s', '$1', $content);
+        //$content = preg_replace('/(-- .*?(?:www\..*?|(?:\+\d{1,4}\s?\d+)+)(?:\n|$)\n*){2,}/s', '$1', $content);
+        
+        // 12. HTML karakter referanslarını çevir (&amp; gibi)
+        $content = html_entity_decode($content, ENT_QUOTES | ENT_HTML5, 'UTF-8');
+        
+        // 13. Fazla boşlukları temizle ve satır sonlarını normalize et
+        $content = preg_replace('/[ \t]+/', ' ', $content);
+        $content = preg_replace('/\n{3,}/', "\n\n", $content);
+        $content = str_replace(["\r\n", "\r"], "\n", $content);
+        
+        // 14. Uzun URL'leri kısalt (isteğe bağlı)
+        //$content = preg_replace('/https?:\/\/[^\s]{40,}/i', '[URL]', $content);
+        
+        // 15. Son kontroller ve düzeltmeler
+        $content = trim($content);
+        
+        // Tamamen boş gelirse orijinal içeriği döndür (güvenlik önlemi)
+        if (empty($content) || strlen($content) < 10) {
+            // Orjinal içeriği basitçe temizle
+            $original = strip_tags($content);
+            $original = preg_replace('/\n{3,}/', "\n\n", $original);
+            return trim($original);
+        }
+
+        return $content;
     }
+
 }
