@@ -107,6 +107,18 @@ class EmailProcessor
                     continue;
                 }
                 
+                // 5. İzin verilen e-posta adresleri kontrolü
+                if (!$this->isAllowedReplyEmail($email->getFrom())) {
+                    $this->logger->info('Email from unauthorized sender for reply', [
+                        'from' => $email->getFrom(),
+                        'subject' => $email->getSubject()
+                    ]);
+                    
+                    // E-postayı sil ve atla
+                    $this->emailService->deleteEmailByMessageId($email->getMessageId());
+                    continue;
+                }
+                
                 // Check if sender domain is allowed
                 if (!$this->isAllowedDomain($email->getFrom())) {
                     $this->logger->warning('Email from unauthorized domain', [
@@ -250,6 +262,31 @@ class EmailProcessor
                     ]);
                     return true;
                 }
+            }
+        }
+        
+        return false;
+    }
+    
+    /**
+     * Check if sender is allowed for reply
+     * 
+     * @param string $sender Sender email
+     * @return bool True if allowed, false otherwise
+     */
+    private function isAllowedReplyEmail(string $sender): bool
+    {
+        $allowedReplyEmails = $this->config->getAllowedReplyEmails();
+        
+        // Eğer izin verilen e-posta adresleri tanımlanmamışsa, herkese yanıt ver
+        if (empty($allowedReplyEmails) || $allowedReplyEmails === false) {
+            return true;
+        }
+        
+        // İzin verilen e-posta adreslerinden biri mi kontrol et
+        foreach ($allowedReplyEmails as $allowedEmail) {
+            if (strtolower(trim($sender)) === strtolower(trim($allowedEmail))) {
+                return true;
             }
         }
         

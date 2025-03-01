@@ -24,6 +24,7 @@ Bu sistem, belirli bir e-posta adresine (örn. ai@example.com) gelen e-postalar�
 - Eski e-posta zincirini yanıta ekleme özelliğini yapılandırabilme (opsiyonel)
 - Hata ayıklama modunu etkinleştirme/devre dışı bırakma özelliği
 - TO/CC alanı kontrolü: Sadece TO alanında olduğunda yanıt verme, CC olduğunda yanıt vermeme ve silme (opsiyonel)
+- Belirli e-posta adreslerine yanıt verme kısıtlaması: Sadece izin verilen e-posta adreslerine yanıt verme (opsiyonel)
 - İşlenen e-postaları otomatik olarak okundu işaretleme ve silme (sonsuz döngüleri önleme)
 - E-postaların sadece plaintext kısmını işleme
 - E-posta girintilerini (>) koruyarak hangi e-postanın cevap olduğunu anlama
@@ -48,7 +49,8 @@ Bu sistem, belirli bir e-posta adresine (örn. ai@example.com) gelen e-postalar�
    - `ALLOW_AI_RECIPIENTS`: AI'ın önerdiği alıcıların kullanılmasına izin ver (true/false, varsayılan: false)
    - `DEBUG`: Hata ayıklama modunu etkinleştir (true/false, varsayılan: true)
    - `INCLUDE_THREAD_EMAILS`: Eski e-posta zincirini yanıta ekleme (true/false, varsayılan: false)
-    - `IGNORE_CC_EMAILS`: Sadece TO alanında olduğunda yanıt ver, CC olduğunda yanıt verme ve sil (true/false, varsayılan: false)
+   - `IGNORE_CC_EMAILS`: Sadece TO alanında olduğunda yanıt ver, CC olduğunda yanıt verme ve sil (true/false, varsayılan: false)
+   - `ALLOWED_REPLY_EMAILS`: Sadece belirli e-posta adreslerine yanıt ver (virgülle ayrılmış liste, boş bırakılırsa tüm e-postalara yanıt verir)
 
 ## Kullanım
 
@@ -151,6 +153,13 @@ Sistem, e-postanın TO veya CC alanında olup olmadığını kontrol edebilir ve
 - `IGNORE_CC_EMAILS=false`: Sistem hem TO hem de CC alanında olduğunda yanıt verir (varsayılan)
 
 Bu özellik, AI'ın sadece kendisine doğrudan gönderilen e-postalara yanıt vermesini sağlar ve bilgi amaçlı CC olarak eklendiği e-postaları otomatik olarak siler.
+
+## Belirli E-posta Adreslerine Yanıt Verme Kısıtlaması
+
+Sistem, sadece belirli e-posta adreslerine yanıt verebilir:
+
+- `ALLOWED_REPLY_EMAILS=email1@example.com,email2@example.com`: Sistem sadece bu listedeki e-posta adreslerinden gelen e-postalara yanıt verir
+- `ALLOWED_REPLY_EMAILS=` (boş): Sistem tüm e-postalara yanıt verir (varsayılan)
 
 ## E-posta İşleme Sonrası Otomatik Temizleme
 
