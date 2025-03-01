@@ -119,8 +119,8 @@ class EmailProcessor
                     continue;
                 }
                 
-                // Check if sender domain is allowed
-                if (!$this->isAllowedDomain($email->getFrom())) {
+                // Check if the sender domain or always allowed email address is allowed
+                if (!$this->isAllwaysAllowedEmail($email->getFrom()) && !$this->isAllowedDomain($email->getFrom())) {
                     $this->logger->warning('Email from unauthorized domain', [
                         'from' => $email->getFrom()
                     ]);
@@ -265,6 +265,27 @@ class EmailProcessor
             }
         }
         
+        return false;
+    }
+    
+    /**
+     * Check if sender is ALLWAYS allowed for reply
+     * 
+     * @param string $sender Sender email
+     * @return bool True if allowed, false otherwise
+     */
+    private function isAllwaysAllowedEmail(string $sender): bool
+    {
+        $allwaysAllowedEmails = $this->config->getAllwaysAllowedEmails();
+        
+        // İzin verilen e-posta adreslerinden biri mi kontrol et
+        foreach ($allwaysAllowedEmails as $allowedEmail) {
+            if (strtolower(trim($sender)) === strtolower(trim($allowedEmail))) {
+                return true;
+            }
+        }
+        
+        // Özel izni yoksa sıradaki kontrole geçecek
         return false;
     }
     

@@ -65,6 +65,7 @@ class AppConfig
             'include_thread_emails' => isset($_ENV['INCLUDE_THREAD_EMAILS']) ? filter_var($_ENV['INCLUDE_THREAD_EMAILS'], FILTER_VALIDATE_BOOLEAN) : false,
             'allowed_reply_emails' => isset($_ENV['ALLOWED_REPLY_EMAILS']) && !empty($_ENV['ALLOWED_REPLY_EMAILS']) ? explode(',', $_ENV['ALLOWED_REPLY_EMAILS']) : [],
             'ignore_cc_emails' => isset($_ENV['IGNORE_CC_EMAILS']) ? filter_var($_ENV['IGNORE_CC_EMAILS'], FILTER_VALIDATE_BOOLEAN) : false,
+            'allways_allowed_emails' => isset($_ENV['ALLWAYS_ALLOWED_EMAILS']) ? explode(',', $_ENV['ALLWAYS_ALLOWED_EMAILS']) : [],
         ];
     }
 
@@ -142,19 +143,19 @@ class AppConfig
     {
         return $this->appConfig['debug'];
     }
-    
+
     public function ignoreCcEmails(): bool
     {
         return $this->appConfig['ignore_cc_emails'];
     }
-    
-    /**
-     * Get allowed reply emails
-     * 
-     * @return array Array of allowed reply email addresses
-     */
+
     public function getAllowedReplyEmails(): array
     {
         return $this->appConfig['allowed_reply_emails'];
+    }
+
+    public function getAllwaysAllowedEmails(): array
+    {
+        return $this->appConfig['allways_allowed_emails'];
     }
 }
