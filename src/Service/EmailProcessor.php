@@ -175,7 +175,7 @@ class EmailProcessor
                     $this->sendErrorNotification(
                         $email->getFrom(),
                         "E-posta yanıtı gönderilemedi",
-                        "Merhaba,\n\nE-postanıza yanıt gönderilirken bir hata oluştu. Lütfen daha sonra tekrar deneyin veya sistem yöneticisiyle iletişime geçin.\n\nSaygılarımızla,\nAi.Z"
+                        "Merhaba,\n\nE-postanıza yanıt gönderilirken bir hata oluştu. Lütfen daha sonra tekrar deneyin veya sistem yöneticisiyle iletişime geçin."
                     );
                 }
             } catch (RequestLimitExceededException $e) {
@@ -188,7 +188,7 @@ class EmailProcessor
                 $this->sendErrorNotification(
                     $email->getFrom(),
                     "Günlük istek limitine ulaşıldı",
-                    "Merhaba,\n\nGünlük istek limitine ulaştınız. Lütfen 24 saat sonra tekrar deneyin.\n\nSaygılarımızla,\nAi.Z"
+                    "Merhaba,\n\nGünlük istek limitine ulaştınız. Lütfen 24 saat sonra tekrar deneyin."
                 );
             } catch (InvalidEmailDomainException $e) {
                 $this->logger->warning('Invalid email domain', [
@@ -210,7 +210,7 @@ class EmailProcessor
                     $this->sendErrorNotification(
                         $email->getFrom(),
                         "E-posta işlenirken hata oluştu",
-                        "Merhaba,\n\nE-postanız işlenirken bir hata oluştu. Lütfen daha sonra tekrar deneyin veya sistem yöneticisiyle iletişime geçin.\n\nHata: " . $e->getMessage() . "\n\nSaygılarımızla,\nAi.Z"
+                        "Merhaba,\n\nE-postanız işlenirken bir hata oluştu. Lütfen daha sonra tekrar deneyin veya sistem yöneticisiyle iletişime geçin.\n\nHata: " . $e->getMessage() . "\n\nSaygılarımızla"
                     );
                 }
             }

@@ -68,6 +68,11 @@ class AppConfig
         ];
     }
 
+    public function getAiName(): array
+    {
+        return $this->emailConfig['from_name'];
+    }
+
     public function getEmailConfig(): array
     {
         return $this->emailConfig;
