@@ -25,6 +25,9 @@ Bu sistem, belirli bir e-posta adresine (örn. ai@example.com) gelen e-postalar�
 - Hata ayıklama modunu etkinleştirme/devre dışı bırakma özelliği
 - TO/CC alanı kontrolü: Sadece TO alanında olduğunda yanıt verme, CC olduğunda yanıt vermeme ve silme (opsiyonel)
 - İşlenen e-postaları otomatik olarak okundu işaretleme ve silme (sonsuz döngüleri önleme)
+- E-postaların sadece plaintext kısmını işleme
+- E-posta girintilerini (>) koruyarak hangi e-postanın cevap olduğunu anlama
+- İmza kısımlarını (genellikle -- sonrası) otomatik olarak kaldırma
 
 ## Kurulum
 
@@ -111,6 +114,17 @@ Sistem, hata ayıklama modunu `.env` dosyasındaki `DEBUG` ayarı ile kontrol ed
 - `DEBUG=false`: Sadece hata mesajları (ERROR) app.log dosyasına yazılır ve sadece hata mesajları terminalde gösterilir
 
 Hata ayıklama modu devre dışı bırakıldığında, sistem sessiz modda çalışır ve sadece hata durumlarında bilgi verir.
+
+## E-posta İçeriği Temizleme
+
+Sistem, e-posta içeriğini işlerken şu adımları uygular:
+
+1. Sadece plaintext kısmını alır, HTML içeriğini kullanmaz
+2. E-posta girintilerini (>) korur, böylece hangi e-postanın cevap olduğu anlaşılabilir
+3. İmza kısımlarını (genellikle -- sonrası) otomatik olarak kaldırır
+4. Loglarda temizlenmiş e-posta içeriğini gösterir
+
+Bu sayede, AI e-posta içeriğini daha doğru bir şekilde anlayabilir ve yanıtlayabilir.
 
 ## Markdown Desteği
 

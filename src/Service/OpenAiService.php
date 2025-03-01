@@ -153,11 +153,8 @@ Markdown formatını kullanmalısın. Emojiler için Unicode UTF-8 kullanmalıs�
             $prompt .= "Önceki E-postalar:\n";
             
             foreach (array_reverse($email->getThreadEmails()) as $index => $threadEmail) {
-                // Temizlenmiş ve düzgün formatlanmış içerik
-                $cleanThreadEmail = $this->cleanEmailContent($threadEmail);
-                
                 $prompt .= "--- E-posta " . ($index + 1) . " ---\n";
-                $prompt .= $cleanThreadEmail . "\n\n";
+                $prompt .= $threadEmail . "\n\n";
             }
         }
         
@@ -174,7 +171,7 @@ Markdown formatını kullanmalısın. Emojiler için Unicode UTF-8 kullanmalıs�
      * @param string $content Email content
      * @return string Cleaned content
      */
-    private function cleanEmailContent(string $content): string
+    public function cleanEmailContent(string $content): string
     {
         // HTML etiketlerini kaldır
         $content = strip_tags($content);
@@ -182,17 +179,8 @@ Markdown formatını kullanmalısın. Emojiler için Unicode UTF-8 kullanmalıs�
         // Quoted-printable kodlamasını çöz (eğer hala varsa)
         $content = quoted_printable_decode($content);
         
-        // Gereksiz boşlukları temizle
-        $content = preg_replace('/\s+/', ' ', $content);
-        
-        // E-posta başlık bilgilerini temizle
-        $content = preg_replace('/^>.*$/m', '', $content);
-        
         // Satır sonlarını düzelt
         $content = str_replace(["\r\n", "\r"], "\n", $content);
-        
-        // Birden fazla boş satırı tek satıra indir
-        $content = preg_replace('/\n{3,}/', "\n\n", $content);
         
         // Özel karakterleri düzelt
         $content = mb_convert_encoding($content, 'UTF-8', 'UTF-8');
@@ -223,6 +211,34 @@ Markdown formatını kullanmalısın. Emojiler için Unicode UTF-8 kullanmalıs�
             },
             $content
         );
+        
+        // E-posta içeriğini satırlara böl
+        $lines = explode("\n", $content);
+        $cleanedLines = [];
+        $signatureFound = false;
+        
+        foreach ($lines as $index => $line) {
+            // İmza kontrolü - eğer bir satır "--" ile başlıyorsa ve bu satır son 30 satır içindeyse
+            if (preg_match('/^--/', trim($line)) && $index > (count($lines) - 30)) {
+                $signatureFound = true;
+                continue;
+            }
+            
+            // İmza bulunduysa, sonraki satırları atla
+            if ($signatureFound) {
+                continue;
+            }
+            
+            // Satırı temizle ama girintileri koru
+            // E-posta girintilerini (>) koru
+            if (preg_match('/^(>+\s*)(.*)$/', $line, $matches)) {
+                // Girinti bulundu, olduğu gibi bırak
+            }
+            
+            $cleanedLines[] = $line;
+        }
+        
+        $content = implode("\n", $cleanedLines);
         
         return trim($content);
     }

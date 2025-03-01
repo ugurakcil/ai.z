@@ -106,12 +106,19 @@ class EmailProcessor
                     continue;
                 }
                 
+                // E-posta içeriğini temizle
+                $cleanBody = $this->openAiService->cleanEmailContent($email->getBody());
+                
+
                 $this->logger->info('Processing email', [
                     'from' => $email->getFrom(),
                     'subject' => $email->getSubject(),
-                    'body' => $email->getBody(),
-                    'html_body' => $email->getHtmlBody(),
-                    'thread_emails_count' => count($email->getThreadEmails())
+                    'body' => $cleanBody,
+                    'thread_emails_count' => count($email->getThreadEmails()),
+                    //'body_length' => strlen($email->getBody()),
+                    //'body_first_100_chars' => substr($email->getBody(), 0, 100),
+                    //'html_body_length' => strlen($email->getHtmlBody()),
+                    //'html_body_first_100_chars' => substr($email->getHtmlBody(), 0, 100)
                 ]);
                 
                 // Check request limit

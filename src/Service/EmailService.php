@@ -180,18 +180,28 @@ class EmailService
     private function getEmailBody($imapStream, $emailId, $structure): string
     {
         $body = '';
+
+        // Önce tüm e-posta içeriğini al
+        $fullBody = imap_body($imapStream, $emailId);
         
-        if ($structure->type == 0) { // Plain text
+        // Eğer içerik boşsa, farklı bir yaklaşım dene
+        if (empty($fullBody)) {
+            $this->logger->info('Email body is empty, trying alternative methods');
+            
+            // Alternatif 1: imap_fetchbody ile "1" parametresi
             $body = imap_fetchbody($imapStream, $emailId, "1");
-        } elseif ($structure->type == 1) { // Multipart
-            // Try to get plain text part
-            for ($i = 0; $i < count($structure->parts); $i++) {
-                $part = $structure->parts[$i];
-                if ($part->type == 0) {
-                    $body = imap_fetchbody($imapStream, $emailId, (string)($i + 1));
-                    break;
-                }
+            
+            // Alternatif 2: imap_fetchbody ile "1.1" parametresi (genellikle plaintext)
+            if (empty($body)) {
+                $body = imap_fetchbody($imapStream, $emailId, "1.1");
             }
+            
+            // Alternatif 3: imap_fetchbody ile "1.2" parametresi (genellikle HTML)
+            if (empty($body)) {
+                $body = imap_fetchbody($imapStream, $emailId, "1.2");
+            }
+        } else {
+            $body = $fullBody;
         }
         
         // Decode body
@@ -203,6 +213,12 @@ class EmailService
             // Diğer kodlamalar için de quoted-printable decode deneyelim
             $body = quoted_printable_decode($body);
         }
+        
+        // Log body information
+        $this->logger->info('Email body retrieved', [
+            'body_length' => strlen($body),
+            'body_first_100_chars' => substr($body, 0, 100)
+        ]);
         
         return $body;
     }
