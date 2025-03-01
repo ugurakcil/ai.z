@@ -135,10 +135,10 @@ Markdown formatını kullanmalısın. Emojiler için Unicode UTF-8 kullanmalıs�
      * @param Email $email Email object
      * @return string Prepared prompt
      */
-    private function preparePrompt(Email $email): string
+    public function preparePrompt(Email $email): string
     {
         $prompt = '';
-        
+
         // Add custom prompt if available
         if ($email->getCustomPrompt() && strlen($email->getCustomPrompt()) === 10) {
             $prompt .= "Özel Yönerge: " . $email->getCustomPrompt() . "\n\n";
@@ -151,6 +151,7 @@ Markdown formatını kullanmalısın. Emojiler için Unicode UTF-8 kullanmalıs�
         
         // Temizlenmiş ve düzgün formatlanmış içerik
         $cleanBody = $this->cleanEmailContent($email->getBody());
+        
         $prompt .= "İçerik:\n" . $cleanBody . "\n\n";
         
         // Add thread emails if available
@@ -189,7 +190,7 @@ Markdown formatını kullanmalısın. Emojiler için Unicode UTF-8 kullanmalıs�
         
         // Özel karakterleri düzelt
         $content = mb_convert_encoding($content, 'UTF-8', 'UTF-8');
-        
+
         // =?UTF-8?B? gibi kodlanmış başlıkları çöz
         $content = preg_replace_callback(
             '/=\?UTF-8\?B\?(.*?)\?=/',
@@ -216,34 +217,6 @@ Markdown formatını kullanmalısın. Emojiler için Unicode UTF-8 kullanmalıs�
             },
             $content
         );
-        
-        // E-posta içeriğini satırlara böl
-        $lines = explode("\n", $content);
-        $cleanedLines = [];
-        $signatureFound = false;
-        
-        foreach ($lines as $index => $line) {
-            // İmza kontrolü - eğer bir satır "--" ile başlıyorsa ve bu satır son 30 satır içindeyse
-            if (preg_match('/^--/', trim($line)) && $index > (count($lines) - 30)) {
-                $signatureFound = true;
-                continue;
-            }
-            
-            // İmza bulunduysa, sonraki satırları atla
-            if ($signatureFound) {
-                continue;
-            }
-            
-            // Satırı temizle ama girintileri koru
-            // E-posta girintilerini (>) koru
-            if (preg_match('/^(>+\s*)(.*)$/', $line, $matches)) {
-                // Girinti bulundu, olduğu gibi bırak
-            }
-            
-            $cleanedLines[] = $line;
-        }
-        
-        $content = implode("\n", $cleanedLines);
         
         return trim($content);
     }

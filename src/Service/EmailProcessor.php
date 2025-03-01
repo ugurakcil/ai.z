@@ -49,6 +49,13 @@ class EmailProcessor
         $this->logger->info('Found ' . count($emails) . ' unseen emails');
         
         foreach ($emails as $email) {
+            /*
+            var_dump($this->openAiService->cleanEmailContent($email->getBody()));
+            echo "\n\n##############################################################\n\n";
+            var_dump($email->getBody()); 
+            die();
+            */
+
             usleep(200000); // 0.2 seconds delay between each email processing
             // Açılan e-postaları okundu olarak işaretle
             $marked = $this->markEmailAsRead($email);
@@ -131,7 +138,6 @@ class EmailProcessor
                 
                 // E-posta içeriğini temizle
                 $cleanBody = $this->openAiService->cleanEmailContent($email->getBody());
-                
 
                 $this->logger->info('Processing email', [
                     'from' => $email->getFrom(),
