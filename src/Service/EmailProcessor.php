@@ -81,6 +81,19 @@ class EmailProcessor
                     continue;
                 }
                 
+                // 4. CC kontrolü - Eğer IGNORE_CC_EMAILS aktifse ve e-posta CC ile geldiyse
+                if ($this->config->ignoreCcEmails() && $this->isEmailInCcOnly($email)) {
+                    $this->logger->info('Email received as CC only, ignoring as per configuration', [
+                        'from' => $email->getFrom(),
+                        'subject' => $email->getSubject()
+                    ]);
+                    
+                    // E-postayı sil
+                    $this->emailService->deleteEmailByMessageId($email->getMessageId());
+                    
+                    continue;
+                }
+                
                 /*
                 $this->logger->info('Processing email', [
                     'from' => $email->getFrom(),
@@ -241,6 +254,31 @@ class EmailProcessor
         }
         
         return false;
+    }
+
+    /**
+     * Check if email is only in CC field and not in TO field
+     * 
+     * @param Email $email Email object
+     * @return bool True if email is only in CC, false otherwise
+     */
+    private function isEmailInCcOnly(Email $email): bool
+    {
+        $emailConfig = $this->config->getEmailConfig();
+        $aiEmailAddress = $emailConfig['username'];
+        
+        // TO alanında AI e-posta adresi var mı kontrol et
+        $toRecipients = $email->getTo();
+        foreach ($toRecipients as $recipient) {
+            if (strtolower($recipient) === strtolower($aiEmailAddress)) {
+                // TO alanında AI e-posta adresi varsa, CC değil
+                return false;
+            }
+        }
+        
+        // TO alanında yoksa ve CC alanında varsa, sadece CC'de demektir
+        $ccRecipients = $email->getCc();
+        return in_array(strtolower($aiEmailAddress), array_map('strtolower', $ccRecipients));
     }
     
     /**

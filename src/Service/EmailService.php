@@ -753,6 +753,51 @@ class EmailService
             return false;
         }
     }
+
+    /**
+     * Delete email by message ID
+     * 
+     * @param string $messageId Message ID
+     * @return bool True on success, false on failure
+     */
+    public function deleteEmailByMessageId(string $messageId): bool
+    {
+        $imapConfig = $this->config->getImapConfig();
+        $mailbox = $this->getImapMailbox($imapConfig);
+        
+        try {
+            // Connect to the mailbox
+            $imapStream = imap_open($mailbox, $imapConfig['username'], $imapConfig['password']);
+            
+            if (!$imapStream) {
+                $this->logger->error('IMAP connection failed: ' . imap_last_error());
+                return false;
+            }
+            
+            // Get all messages and filter by Message-ID
+            $search = [];
+            $messageCount = imap_num_msg($imapStream);
+            
+            for ($i = 1; $i <= $messageCount; $i++) {
+                $headers = imap_headerinfo($imapStream, $i);
+                if (!$headers) {
+                    continue;
+                }
+                if (isset($headers->message_id) && trim($headers->message_id) === $messageId) {
+                    $this->deleteEmail($i, $imapStream);
+                    $this->logger->info('Email deleted by message ID', ['message_id' => $messageId]);
+                    imap_close($imapStream);
+                    return true;
+                }
+            }
+            
+            imap_close($imapStream);
+            return false;
+        } catch (\Exception $e) {
+            $this->logger->error('Error deleting email by message ID: ' . $e->getMessage());
+            return false;
+        }
+    }
     
     /**
      * Delete email

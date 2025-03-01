@@ -23,6 +23,7 @@ Bu sistem, belirli bir e-posta adresine (örn. ai@example.com) gelen e-postalar�
 - Emojileri e-posta içeriğinde doğru şekilde görüntüleme
 - Eski e-posta zincirini yanıta ekleme özelliğini yapılandırabilme (opsiyonel)
 - Hata ayıklama modunu etkinleştirme/devre dışı bırakma özelliği
+- TO/CC alanı kontrolü: Sadece TO alanında olduğunda yanıt verme, CC olduğunda yanıt vermeme ve silme (opsiyonel)
 
 ## Kurulum
 
@@ -43,6 +44,7 @@ Bu sistem, belirli bir e-posta adresine (örn. ai@example.com) gelen e-postalar�
    - `ALLOW_AI_RECIPIENTS`: AI'ın önerdiği alıcıların kullanılmasına izin ver (true/false, varsayılan: false)
    - `DEBUG`: Hata ayıklama modunu etkinleştir (true/false, varsayılan: true)
    - `INCLUDE_THREAD_EMAILS`: Eski e-posta zincirini yanıta ekleme (true/false, varsayılan: false)
+    - `IGNORE_CC_EMAILS`: Sadece TO alanında olduğunda yanıt ver, CC olduğunda yanıt verme ve sil (true/false, varsayılan: false)
 
 ## Kullanım
 
@@ -125,6 +127,15 @@ Sistem, e-posta zincirindeki tüm e-postaları doğru şekilde alıp işleyebili
 
 - `INCLUDE_THREAD_EMAILS=true`: Eski e-posta zinciri yanıta eklenir
 - `INCLUDE_THREAD_EMAILS=false`: Eski e-posta zinciri yanıta eklenmez (varsayılan)
+
+## TO/CC Alanı Kontrolü
+
+Sistem, e-postanın TO veya CC alanında olup olmadığını kontrol edebilir ve buna göre işlem yapabilir:
+
+- `IGNORE_CC_EMAILS=true`: Sistem sadece TO alanında olduğunda yanıt verir, CC alanında olduğunda yanıt vermez ve e-postayı siler
+- `IGNORE_CC_EMAILS=false`: Sistem hem TO hem de CC alanında olduğunda yanıt verir (varsayılan)
+
+Bu özellik, AI'ın sadece kendisine doğrudan gönderilen e-postalara yanıt vermesini sağlar ve bilgi amaçlı CC olarak eklendiği e-postaları otomatik olarak siler.
 
 ## Engellenen Gönderenler ve Alıcılar
 

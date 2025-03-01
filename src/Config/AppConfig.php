@@ -63,6 +63,7 @@ class AppConfig
             'allow_ai_recipients' => isset($_ENV['ALLOW_AI_RECIPIENTS']) ? filter_var($_ENV['ALLOW_AI_RECIPIENTS'], FILTER_VALIDATE_BOOLEAN) : false,
             'debug' => isset($_ENV['DEBUG']) ? filter_var($_ENV['DEBUG'], FILTER_VALIDATE_BOOLEAN) : true,
             'include_thread_emails' => isset($_ENV['INCLUDE_THREAD_EMAILS']) ? filter_var($_ENV['INCLUDE_THREAD_EMAILS'], FILTER_VALIDATE_BOOLEAN) : false,
+            'ignore_cc_emails' => isset($_ENV['IGNORE_CC_EMAILS']) ? filter_var($_ENV['IGNORE_CC_EMAILS'], FILTER_VALIDATE_BOOLEAN) : false,
         ];
     }
 
@@ -134,5 +135,10 @@ class AppConfig
     public function isDebugEnabled(): bool
     {
         return $this->appConfig['debug'];
+    }
+    
+    public function ignoreCcEmails(): bool
+    {
+        return $this->appConfig['ignore_cc_emails'];
     }
 }
